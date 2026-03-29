@@ -1,3 +1,66 @@
+// ── Version check ─────────────────────────────────────────────────────────────
+async function checkVersion() {
+  let current, repo;
+  try {
+    const r = await fetch('/api/version');
+    ({ version: current, repo } = await r.json());
+  } catch { return; }
+
+  let latest = null;
+  let releaseUrl = `https://github.com/${repo}/releases`;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+    if (r.ok) {
+      const data = await r.json();
+      latest = data.tag_name?.replace(/^v/, '');
+      if (data.html_url) releaseUrl = data.html_url;
+    }
+  } catch { /* offline or no releases — show current version only */ }
+
+  const upToDate = !latest || latest === current;
+  const badge    = document.getElementById('version-badge');
+  const dot      = document.getElementById('version-dot');
+  const label    = document.getElementById('version-label');
+
+  badge.href = releaseUrl;
+  badge.classList.remove('hidden');
+  badge.classList.add('flex');
+
+  if (upToDate) {
+    badge.className = badge.className.replace('border', '') +
+      ' border border-green-200 bg-green-50 text-green-700 hover:bg-green-100';
+    dot.className   = dot.className + ' bg-green-500';
+    label.textContent = `v${current} · Atualizado`;
+  } else {
+    badge.className = badge.className.replace('border', '') +
+      ' border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100';
+    dot.className   = dot.className + ' bg-orange-500 animate-pulse';
+    label.textContent = `v${current} → v${latest}`;
+  }
+
+  // Config screen card
+  const card     = document.getElementById('version-card');
+  const cardIcon = document.getElementById('version-card-icon');
+  const cardText = document.getElementById('version-card-text');
+  const cardLink = document.getElementById('version-card-link');
+
+  card.classList.remove('hidden');
+  if (upToDate) {
+    card.className = card.className + ' bg-green-50 border-green-200';
+    cardIcon.textContent = '✅';
+    cardText.textContent = `Versão ${current} — você está usando a versão mais recente.`;
+  } else {
+    card.className = card.className + ' bg-orange-50 border-orange-200';
+    cardIcon.textContent = '⬆️';
+    cardText.innerHTML = `Versão <strong>${current}</strong> instalada — nova versão <strong>v${latest}</strong> disponível.`;
+    cardLink.href = releaseUrl;
+    cardLink.classList.remove('hidden');
+    cardLink.classList.add('text-orange-600');
+  }
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentJobId    = null;  // active migration job
 let pollingInterval = null;  // migration poll timer
@@ -548,3 +611,6 @@ function novaMigracao() {
   showScreen('cursos');
   carregarCursos();
 }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+checkVersion();

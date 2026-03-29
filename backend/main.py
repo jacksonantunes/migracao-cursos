@@ -21,6 +21,10 @@ if _BACKEND_DIR not in sys.path:
 
 from services.migration import executar_exportacao, executar_migracao  # noqa: E402
 
+# ── Version ───────────────────────────────────────────────────────────────────
+VERSION = '1.0.0'
+GITHUB_REPO = 'jacksonantunes/migracao-cursos'
+
 # ── In-memory state ───────────────────────────────────────────────────────────
 app_config: dict = {}   # credentials (never written to disk)
 jobs:       dict = {}   # migration jobs
@@ -195,6 +199,11 @@ def download_curso(job_id: str, course_id: str):
         media_type='application/json',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+@app.get('/api/version')
+def get_version():
+    return {'version': VERSION, 'repo': GITHUB_REPO}
 
 
 @app.post('/api/exportar')

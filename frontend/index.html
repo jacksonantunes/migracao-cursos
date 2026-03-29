@@ -17,11 +17,16 @@
       <div class="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg shrink-0">
         <span class="text-base leading-none">🔄</span>
       </div>
-      <div class="flex items-baseline gap-2">
+      <div class="flex items-baseline gap-2 flex-1">
         <span class="font-bold text-gray-800 text-sm">Migrador de Cursos</span>
         <span class="text-gray-300 text-xs hidden sm:inline">|</span>
         <span class="text-gray-400 text-xs hidden sm:inline">Edools → MemberKit</span>
       </div>
+      <a id="version-badge" href="#" target="_blank"
+        class="hidden items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors">
+        <span id="version-dot" class="w-1.5 h-1.5 rounded-full shrink-0"></span>
+        <span id="version-label"></span>
+      </a>
     </div>
   </header>
 
@@ -62,6 +67,18 @@
       </div>
 
       <p id="config-error" class="text-red-500 text-sm mb-4 hidden"></p>
+
+      <!-- Versão -->
+      <div id="version-card" class="hidden mb-4 px-4 py-3 rounded-lg border text-xs flex items-center gap-2.5">
+        <span id="version-card-icon" class="text-base shrink-0"></span>
+        <div class="flex-1 min-w-0">
+          <span id="version-card-text" class="text-gray-600"></span>
+        </div>
+        <a id="version-card-link" href="#" target="_blank"
+          class="shrink-0 font-semibold underline underline-offset-2 hidden">
+          Ver release
+        </a>
+      </div>
 
       <button id="btn-conectar" onclick="conectar()"
         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors text-sm">
