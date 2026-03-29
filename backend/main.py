@@ -16,8 +16,8 @@ _PROJECT_ROOT = os.path.dirname(_BACKEND_DIR)
 _FRONTEND_DIR = os.path.join(_PROJECT_ROOT, 'frontend')
 MAPPING_FILE  = os.path.join(_PROJECT_ROOT, 'memberkit_mapping.json')
 
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
 
 from services.migration import executar_migracao  # noqa: E402
 
