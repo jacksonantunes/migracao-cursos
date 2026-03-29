@@ -197,5 +197,11 @@ def download_curso(job_id: str, course_id: str):
     )
 
 
+# ── Health check ─────────────────────────────────────────────────────────────
+@app.get('/health')
+def health():
+    return {'status': 'ok'}
+
+
 # ── Frontend ──────────────────────────────────────────────────────────────────
 app.mount('/', StaticFiles(directory=_FRONTEND_DIR, html=True), name='frontend')
