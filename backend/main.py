@@ -5,10 +5,11 @@ import sys
 import uuid
 from typing import List
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BACKEND_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +33,19 @@ busca_jobs: dict = {}   # course-search jobs
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title='Migração Edools → MemberKit')
+
+
+class _NoCacheMiddleware(BaseHTTPMiddleware):
+    """Prevents browsers from caching HTML and JS so deploys take effect immediately."""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.endswith(('.html', '.js')) or path in ('/', ''):
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+        return response
+
+app.add_middleware(_NoCacheMiddleware)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
