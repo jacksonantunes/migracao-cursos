@@ -227,6 +227,38 @@
     </div>
   </div>
 
+  <!-- ════════════════════════════════════════════════
+       MODAL — Visualizar dados do curso
+  ════════════════════════════════════════════════ -->
+  <div id="modal-overlay" onclick="handleModalClick(event)"
+    class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col">
+
+      <!-- Header do modal -->
+      <div class="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div class="min-w-0 pr-4">
+          <h2 id="modal-title" class="text-base font-bold text-gray-800 truncate"></h2>
+          <p id="modal-subtitle" class="text-xs text-gray-400 mt-0.5"></p>
+        </div>
+        <button onclick="closeModal()"
+          class="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors text-lg leading-none">
+          ✕
+        </button>
+      </div>
+
+      <!-- Body do modal -->
+      <div id="modal-body" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+
+      <!-- Footer do modal -->
+      <div class="px-6 py-3 border-t border-gray-100 shrink-0 flex justify-end">
+        <button onclick="closeModal()"
+          class="text-sm text-gray-500 hover:text-gray-700 font-medium px-4 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

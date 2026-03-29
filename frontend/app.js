@@ -356,6 +356,11 @@ function renderProgressoCursos(cursos) {
           class="text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
           ⬇ JSON
         </button>
+        <button onclick="handleView(${c.id})"
+          id="view-${c.id}"
+          class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
+          👁 Ver
+        </button>
       </div>
     `;
     lista.appendChild(row);
@@ -611,6 +616,161 @@ function novaMigracao() {
   showScreen('cursos');
   carregarCursos();
 }
+
+// ── Visualizar curso (modal) ──────────────────────────────────────────────────
+async function handleView(courseId) {
+  const jobId = courseDataReady[courseId];
+  if (jobId) {
+    await fetchAndShowModal(jobId, courseId);
+    return;
+  }
+  await exportarEVisualizar(courseId);
+}
+
+async function exportarEVisualizar(courseId) {
+  const btn = document.getElementById(`view-${courseId}`);
+  if (btn) { btn.dataset.orig = btn.textContent; btn.textContent = '⏳'; btn.disabled = true; }
+
+  try {
+    const res = await fetch('/api/exportar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ curso_ids: [courseId] }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || await res.text());
+    const { job_id } = await res.json();
+
+    await new Promise((resolve, reject) => {
+      const timer = setInterval(async () => {
+        try {
+          const r   = await fetch(`/api/status/${job_id}`);
+          const job = await r.json();
+          if (job.status === 'done' || job.status === 'error') {
+            clearInterval(timer);
+            const cid = String(courseId);
+            if ((job.dados || {})[cid]) { courseDataReady[courseId] = job_id; resolve(); }
+            else reject(new Error((job.erros || {})[cid] || 'Falha ao exportar'));
+          }
+        } catch (e) { clearInterval(timer); reject(e); }
+      }, 1500);
+    });
+
+    await fetchAndShowModal(courseDataReady[courseId], courseId);
+  } catch (e) {
+    alert(`Erro ao carregar dados: ${e.message}`);
+  } finally {
+    if (btn) { btn.textContent = btn.dataset.orig || '👁 Ver'; btn.disabled = false; }
+  }
+}
+
+async function fetchAndShowModal(jobId, courseId) {
+  try {
+    const res = await fetch(`/api/download/${jobId}/${courseId}`);
+    if (!res.ok) throw new Error('Dados não disponíveis');
+    const dados = await res.json();
+    renderModal(dados);
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    document.getElementById('modal-body').scrollTop = 0;
+  } catch (e) {
+    alert(`Erro ao abrir visualização: ${e.message}`);
+  }
+}
+
+function renderModal(dados) {
+  if (!dados?.length) return;
+  const cd      = dados[0];
+  const course  = cd.course  || {};
+  const modules = cd.modules || [];
+
+  const totalContents = modules.reduce((acc, m) => acc + (m.contents || []).length, 0);
+
+  document.getElementById('modal-title').textContent = course.name || `Curso ID ${course.id}`;
+  document.getElementById('modal-subtitle').textContent =
+    `ID: ${course.id} · ${modules.length} módulo${modules.length !== 1 ? 's' : ''} · ${totalContents} conteúdo${totalContents !== 1 ? 's' : ''}`;
+
+  const body = document.getElementById('modal-body');
+  body.innerHTML = '';
+
+  if (!modules.length) {
+    body.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Nenhum módulo encontrado.</p>';
+    return;
+  }
+
+  modules.forEach((m, mi) => {
+    const mod      = m.module   || {};
+    const contents = m.contents || [];
+    const num      = String(mi + 1).padStart(2, '0');
+
+    const section = document.createElement('div');
+    section.className = 'border border-gray-100 rounded-xl overflow-hidden';
+
+    // ── Cabeçalho do módulo (clicável) ────────────────────────────────
+    const header = document.createElement('div');
+    header.className = 'flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 cursor-pointer select-none transition-colors';
+    header.innerHTML = `
+      <span class="text-xs font-mono text-gray-300 shrink-0 w-5">${num}</span>
+      <span class="text-xl shrink-0">📦</span>
+      <span class="flex-1 text-sm font-semibold text-gray-700 truncate">${escHtml(mod.name || `Módulo ${mi + 1}`)}</span>
+      <span class="text-xs text-gray-400 shrink-0">${contents.length} item${contents.length !== 1 ? 's' : ''}</span>
+      <span class="text-gray-400 text-xs shrink-0 ml-1 toggle-chevron">▼</span>
+    `;
+
+    // ── Lista de conteúdos ────────────────────────────────────────────
+    const list = document.createElement('div');
+    list.className = 'divide-y divide-gray-50';
+
+    contents.forEach((c, ci) => {
+      const title = c.title || c.name || `Conteúdo ${ci + 1}`;
+      const flags = getContentFlags(c);
+      const ctype = c.content_type ? `<span class="text-xs text-gray-300 font-mono shrink-0">${escHtml(c.content_type)}</span>` : '';
+
+      const item = document.createElement('div');
+      item.className = 'flex items-center gap-3 px-4 py-2.5';
+      item.innerHTML = `
+        <span class="text-xs font-mono text-gray-200 shrink-0 w-5 text-right">${ci + 1}</span>
+        <span class="flex-1 text-sm text-gray-600 truncate" title="${escHtml(title)}">${escHtml(title)}</span>
+        ${ctype}
+        <div class="flex gap-0.5 shrink-0">${flags.map(f => `<span class="text-sm" title="${f.label}">${f.icon}</span>`).join('')}</div>
+      `;
+      list.appendChild(item);
+    });
+
+    // Toggle accordion
+    header.addEventListener('click', () => {
+      const chevron = header.querySelector('.toggle-chevron');
+      const open    = !list.classList.contains('hidden');
+      list.classList.toggle('hidden', open);
+      chevron.textContent = open ? '▶' : '▼';
+    });
+
+    section.appendChild(header);
+    section.appendChild(list);
+    body.appendChild(section);
+  });
+}
+
+function getContentFlags(c) {
+  const flags = [];
+  if (c.body || c.content)                                   flags.push({ icon: '📝', label: 'Texto' });
+  if (c.video_url || c.video_embed || c.embed_code)          flags.push({ icon: '🎥', label: 'Vídeo' });
+  if (c.file_url  || c.attachment_url || c.file)             flags.push({ icon: '📎', label: 'Arquivo' });
+  if (c.url       || c.external_url)                         flags.push({ icon: '🔗', label: 'Link' });
+  if (!flags.length)                                         flags.push({ icon: '⚪', label: 'Sem mídia detectada' });
+  return flags;
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+function handleModalClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+// Fechar modal com ESC
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 checkVersion();
