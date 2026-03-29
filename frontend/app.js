@@ -140,17 +140,8 @@ async function conectar() {
 
 function migrarPorId(courseId) {
   pendingCourseIds = [courseId];
-  logCount         = 0;
-  courseJobMap     = {};
-  courseDataReady  = {};
-  currentJobId     = null;
-  document.getElementById('log-area').innerHTML = '';
-  document.getElementById('resultado-card').classList.add('hidden');
-  document.getElementById('btn-nova-migracao').classList.add('hidden');
-  document.getElementById('btn-iniciar-migracao').classList.remove('hidden');
-  renderProgressoCursos([{ id: courseId, name: `Curso ID ${courseId}` }]);
-  showScreen('progresso');
-  document.getElementById('progresso-status').textContent = 'Pronto — clique em "Iniciar Migração" para começar.';
+  _prepararTela([{ id: courseId, name: `Curso ID ${courseId}` }]);
+  iniciarExportacaoAutomatica();
 }
 
 function voltarConfig() {
@@ -305,6 +296,21 @@ function migrarTodosSelecionados() {
 
 // ── Tela 3 — Progresso ───────────────────────────────────────────────────────
 let pendingCourseIds = [];  // IDs waiting to be migrated
+let exportJobId      = null; // job_id from auto-export (used for import-only)
+
+function _prepararTela(cursos) {
+  logCount        = 0;
+  courseJobMap    = {};
+  courseDataReady = {};
+  currentJobId    = null;
+  exportJobId     = null;
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('resultado-card').classList.add('hidden');
+  document.getElementById('btn-nova-migracao').classList.add('hidden');
+  document.getElementById('btn-iniciar-migracao').classList.add('hidden');
+  renderProgressoCursos(cursos);
+  showScreen('progresso');
+}
 
 function iniciarMigracao() {
   const checks = [...document.querySelectorAll('.curso-check:checked')];
@@ -312,20 +318,94 @@ function iniciarMigracao() {
   if (!ids.length) return;
 
   pendingCourseIds = ids;
-  const selectedCourses = checks.map(c => ({ id: parseInt(c.dataset.id), name: c.dataset.name }));
+  _prepararTela(checks.map(c => ({ id: parseInt(c.dataset.id), name: c.dataset.name })));
+  iniciarExportacaoAutomatica();
+}
 
-  // Prepare screen without starting
-  logCount = 0;
-  courseJobMap = {};
-  courseDataReady = {};
-  currentJobId = null;
-  document.getElementById('log-area').innerHTML = '';
-  document.getElementById('resultado-card').classList.add('hidden');
-  document.getElementById('btn-nova-migracao').classList.add('hidden');
-  document.getElementById('btn-iniciar-migracao').classList.remove('hidden');
-  renderProgressoCursos(selectedCourses);
-  showScreen('progresso');
-  document.getElementById('progresso-status').textContent = 'Pronto — clique em "Iniciar Migração" para começar.';
+async function iniciarExportacaoAutomatica() {
+  document.getElementById('progresso-status').textContent = 'Buscando dados do Edools...';
+
+  // Set all courses to "buscando"
+  pendingCourseIds.forEach(id => {
+    const icon  = document.getElementById(`icon-${id}`);
+    const badge = document.getElementById(`badge-${id}`);
+    if (icon)  icon.textContent  = '📥';
+    if (badge) { badge.textContent = 'Buscando...'; badge.className = 'text-xs font-medium shrink-0 text-blue-500'; }
+  });
+
+  try {
+    const res = await fetch('/api/exportar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ curso_ids: pendingCourseIds }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || await res.text());
+    exportJobId = (await res.json()).job_id;
+
+    await new Promise((resolve) => {
+      const timer = setInterval(async () => {
+        try {
+          const r   = await fetch(`/api/status/${exportJobId}`);
+          const job = await r.json();
+
+          appendLogs(job.logs);
+
+          for (const [cid, status] of Object.entries(job.cursos)) {
+            const icon   = document.getElementById(`icon-${cid}`);
+            const badge  = document.getElementById(`badge-${cid}`);
+            const dlBtn  = document.getElementById(`dl-${cid}`);
+            const viewBtn = document.getElementById(`view-${cid}`);
+
+            if (status === 'processando') {
+              if (icon)  icon.textContent  = '⚙️';
+              if (badge) { badge.textContent = 'Exportando...'; badge.className = 'text-xs font-medium shrink-0 text-blue-500'; }
+            } else if (status === 'concluido') {
+              if (icon)  icon.textContent  = '📦';
+              if (badge) { badge.textContent = 'Pronto para migrar'; badge.className = 'text-xs font-medium shrink-0 text-blue-600'; }
+              if (dlBtn)  { dlBtn.classList.remove('hidden');  dlBtn.classList.add('flex'); }
+              if (viewBtn){ viewBtn.classList.remove('hidden'); viewBtn.classList.add('flex'); }
+              courseDataReady[parseInt(cid)] = exportJobId;
+            } else if (status === 'erro') {
+              if (icon)  icon.textContent  = '❌';
+              if (badge) { badge.textContent = 'Erro na busca'; badge.className = 'text-xs font-medium shrink-0 text-red-500'; }
+              const erroEl = document.getElementById(`erro-${cid}`);
+              if (erroEl && (job.erros || {})[cid]) {
+                erroEl.textContent = job.erros[cid];
+                erroEl.classList.remove('hidden');
+              }
+            }
+          }
+
+          if (job.status === 'done' || job.status === 'error') {
+            clearInterval(timer);
+            resolve();
+          }
+        } catch (e) { console.warn('Export poll error:', e); }
+      }, 1500);
+    });
+
+    const ok  = Object.values(jobs_exportados_local()).filter(v => v === 'concluido').length;
+    const err = pendingCourseIds.length - ok;
+    if (ok > 0) {
+      document.getElementById('progresso-status').textContent =
+        `${ok} curso${ok !== 1 ? 's' : ''} pronto${ok !== 1 ? 's' : ''} — clique em "Iniciar Migração" para importar no MemberKit.` +
+        (err > 0 ? ` (${err} com erro)` : '');
+      document.getElementById('btn-iniciar-migracao').classList.remove('hidden');
+    } else {
+      document.getElementById('progresso-status').textContent = 'Erro ao buscar dados — verifique as credenciais.';
+    }
+
+  } catch (e) {
+    document.getElementById('progresso-status').textContent = `Erro ao buscar dados: ${e.message}`;
+    document.getElementById('btn-iniciar-migracao').classList.remove('hidden');
+  }
+}
+
+function jobs_exportados_local() {
+  // Helper: returns the cursos map from the current export job (already polled)
+  return Object.fromEntries(
+    pendingCourseIds.map(id => [String(id), courseDataReady[id] ? 'concluido' : 'erro'])
+  );
 }
 
 async function executarMigracao() {
@@ -334,15 +414,28 @@ async function executarMigracao() {
   const btn = document.getElementById('btn-iniciar-migracao');
   btn.textContent = '⏳ Iniciando...';
   btn.disabled = true;
+  document.getElementById('progresso-status').textContent = 'Importando no MemberKit...';
 
-  document.getElementById('progresso-status').textContent = 'Iniciando migração...';
+  // Only migrate courses that were successfully exported
+  const idsMigrar = exportJobId
+    ? pendingCourseIds.filter(id => courseDataReady[id] === exportJobId)
+    : pendingCourseIds;
 
   try {
-    const res = await fetch('/api/migrar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ curso_ids: pendingCourseIds }),
-    });
+    let res;
+    if (exportJobId && idsMigrar.length) {
+      res = await fetch('/api/importar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ export_job_id: exportJobId, curso_ids: idsMigrar }),
+      });
+    } else {
+      res = await fetch('/api/migrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curso_ids: idsMigrar }),
+      });
+    }
     if (!res.ok) throw new Error((await res.json()).detail || await res.text());
     currentJobId = (await res.json()).job_id;
   } catch (e) {
@@ -371,22 +464,22 @@ function renderProgressoCursos(cursos) {
         <span id="erro-${c.id}" class="text-xs text-red-500 hidden block"></span>
       </div>
       <span class="text-xs text-gray-300 shrink-0">ID: ${c.id}</span>
-      <span id="badge-${c.id}" class="text-xs text-gray-400 font-medium min-w-[90px] text-right shrink-0">Aguardando</span>
-      <div class="flex gap-1.5 shrink-0 ml-1">
+      <span id="badge-${c.id}" class="text-xs text-gray-400 font-medium shrink-0">Aguardando</span>
+      <div class="flex gap-1 shrink-0">
         <button onclick="migrarCursoUnico(${c.id}, '${escHtml(c.name)}')"
-          id="btn-migrar-${c.id}"
-          class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
-          🔄 Migrar
+          id="btn-migrar-${c.id}" title="Re-migrar"
+          class="w-7 h-7 flex items-center justify-center text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors">
+          🔄
         </button>
         <button onclick="handleDownload(${c.id})"
-          id="dl-${c.id}"
-          class="text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
-          ⬇ JSON
+          id="dl-${c.id}" title="Baixar JSON"
+          class="hidden w-7 h-7 items-center justify-center text-sm bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg transition-colors">
+          ⬇
         </button>
         <button onclick="handleView(${c.id})"
-          id="view-${c.id}"
-          class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
-          👁 Ver
+          id="view-${c.id}" title="Visualizar dados"
+          class="hidden w-7 h-7 items-center justify-center text-sm bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-200 rounded-lg transition-colors">
+          👁
         </button>
       </div>
     `;

@@ -20,10 +20,10 @@ MAPPING_FILE  = os.path.join(_PROJECT_ROOT, 'memberkit_mapping.json')
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
-from services.migration import executar_exportacao, executar_migracao  # noqa: E402
+from services.migration import executar_exportacao, executar_importacao, executar_migracao  # noqa: E402
 
 # ── Version ───────────────────────────────────────────────────────────────────
-VERSION = '1.0.3'
+VERSION = '1.1.0'
 GITHUB_REPO = 'jacksonantunes/migracao-cursos'
 
 # ── In-memory state ───────────────────────────────────────────────────────────
@@ -57,6 +57,11 @@ class ConfigPayload(BaseModel):
 
 
 class MigrarPayload(BaseModel):
+    curso_ids: List[int]
+
+
+class ImportarPayload(BaseModel):
+    export_job_id: str
     curso_ids: List[int]
 
 
@@ -218,6 +223,35 @@ def download_curso(job_id: str, course_id: str):
 @app.get('/api/version')
 def get_version():
     return {'version': VERSION, 'repo': GITHUB_REPO}
+
+
+@app.post('/api/importar')
+def importar_cursos(body: ImportarPayload, background_tasks: BackgroundTasks):
+    """Import-only: uses data from a previous export job to import into MemberKit."""
+    if not app_config:
+        raise HTTPException(400, 'Configure as credenciais primeiro')
+    if body.export_job_id not in jobs:
+        raise HTTPException(404, 'Job de exportação não encontrado — recarregue a página e tente novamente')
+
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        'status':    'running',
+        'logs':      [],
+        'cursos':    {str(cid): 'aguardando' for cid in body.curso_ids},
+        'erros':     {},
+        'dados':     {},
+        'resultado': None,
+    }
+    background_tasks.add_task(
+        executar_importacao,
+        body.export_job_id,
+        body.curso_ids,
+        dict(app_config),
+        jobs,
+        job_id,
+        MAPPING_FILE,
+    )
+    return {'job_id': job_id}
 
 
 @app.post('/api/exportar')

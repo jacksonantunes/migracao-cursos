@@ -5,6 +5,62 @@ from .edools import exportar_curso
 from .memberkit import importar_dados
 
 
+def executar_importacao(
+    export_job_id: str,
+    curso_ids: List[int],
+    config: dict,
+    jobs: dict,
+    job_id: str,
+    mapping_file: str,
+):
+    """Import-only: reads already-exported data from a previous export job and sends to MemberKit."""
+    original_stdout = sys.stdout
+    sys.stdout = _JobLogger(jobs, job_id)
+
+    try:
+        export_dados = jobs.get(export_job_id, {}).get('dados', {})
+
+        for course_id in curso_ids:
+            cid = str(course_id)
+            jobs[job_id]['cursos'][cid] = 'processando'
+
+            try:
+                dados = export_dados.get(cid)
+                if not dados:
+                    jobs[job_id]['cursos'][cid] = 'erro'
+                    jobs[job_id]['erros'][cid] = f'Dados do curso {course_id} não encontrados — exporte novamente'
+                    jobs[job_id]['logs'].append(f'❌ Dados do curso {course_id} não encontrados')
+                    continue
+
+                jobs[job_id]['dados'][cid] = dados
+
+                result = importar_dados(dados, config, mapping_file)
+
+                edools_id = str(dados[0]['course'].get('id'))
+                if not result or edools_id not in result.get('courses', {}):
+                    raise RuntimeError('Curso não foi registrado no MemberKit — verifique a API Key e a URL')
+
+                jobs[job_id]['cursos'][cid] = 'concluido'
+
+            except Exception as exc:
+                msg = str(exc)
+                jobs[job_id]['cursos'][cid] = 'erro'
+                jobs[job_id]['erros'][cid] = msg
+                jobs[job_id]['logs'].append(f'❌ Erro no curso {course_id}: {msg}')
+
+        total_ok  = sum(1 for v in jobs[job_id]['cursos'].values() if v == 'concluido')
+        total_err = sum(1 for v in jobs[job_id]['cursos'].values() if v == 'erro')
+        jobs[job_id]['status']    = 'done'
+        jobs[job_id]['resultado'] = {'concluidos': total_ok, 'erros': total_err}
+
+    except Exception as exc:
+        jobs[job_id]['status'] = 'error'
+        jobs[job_id]['logs'].append(f'❌ Erro fatal: {exc}')
+
+    finally:
+        sys.stdout = original_stdout
+
+
 def executar_exportacao(
     curso_ids: List[int],
     config: dict,
