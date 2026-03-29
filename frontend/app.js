@@ -92,11 +92,18 @@ function escHtml(str) {
 }
 
 // ── Tela 1 — Configuração ─────────────────────────────────────────────────────
+function atualizarBtnConectar() {
+  const id  = document.getElementById('curso-id-direto').value.trim();
+  const btn = document.getElementById('btn-conectar');
+  btn.textContent = id ? `Migrar curso #${id} →` : 'Conectar e Listar Cursos →';
+}
+
 async function conectar() {
-  const token = document.getElementById('edools-token').value.trim();
-  const url   = document.getElementById('edools-url').value.trim();
-  const key   = document.getElementById('mk-key').value.trim();
-  const mkUrl = document.getElementById('mk-url').value.trim();
+  const token    = document.getElementById('edools-token').value.trim();
+  const url      = document.getElementById('edools-url').value.trim();
+  const key      = document.getElementById('mk-key').value.trim();
+  const mkUrl    = document.getElementById('mk-url').value.trim();
+  const cursoId  = document.getElementById('curso-id-direto').value.trim();
 
   if (!token || !url || !key || !mkUrl) {
     setError('config-error', 'Preencha todos os campos antes de continuar.');
@@ -116,14 +123,33 @@ async function conectar() {
     });
     if (!res.ok) throw new Error((await res.json()).detail || await res.text());
 
-    showScreen('cursos');
-    await carregarCursos();
+    if (cursoId) {
+      migrarPorId(parseInt(cursoId));
+    } else {
+      showScreen('cursos');
+      await carregarCursos();
+    }
   } catch (e) {
     setError('config-error', `Erro: ${e.message}`);
   } finally {
-    btn.textContent = 'Conectar e Listar Cursos →';
+    atualizarBtnConectar();
     btn.disabled = false;
   }
+}
+
+function migrarPorId(courseId) {
+  pendingCourseIds = [courseId];
+  logCount         = 0;
+  courseJobMap     = {};
+  courseDataReady  = {};
+  currentJobId     = null;
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('resultado-card').classList.add('hidden');
+  document.getElementById('btn-nova-migracao').classList.add('hidden');
+  document.getElementById('btn-iniciar-migracao').classList.remove('hidden');
+  renderProgressoCursos([{ id: courseId, name: `Curso ID ${courseId}` }]);
+  showScreen('progresso');
+  document.getElementById('progresso-status').textContent = 'Pronto — clique em "Iniciar Migração" para começar.';
 }
 
 function voltarConfig() {

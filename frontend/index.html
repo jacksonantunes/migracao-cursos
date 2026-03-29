@@ -66,6 +66,22 @@
         </div>
       </div>
 
+      <!-- Atalho por ID -->
+      <div class="mb-6">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="flex-1 h-px bg-gray-100"></div>
+          <span class="text-xs font-semibold text-gray-300 uppercase tracking-widest whitespace-nowrap">Opcional</span>
+          <div class="flex-1 h-px bg-gray-100"></div>
+        </div>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm pointer-events-none">#</span>
+          <input id="curso-id-direto" type="number" placeholder="ID do curso (pula a listagem)"
+            oninput="atualizarBtnConectar()"
+            class="w-full pl-7 pr-4 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <p class="text-xs text-gray-400 mt-1.5 ml-1">Informe o ID para ir direto à migração, ou deixe em branco para ver a lista.</p>
+      </div>
+
       <p id="config-error" class="text-red-500 text-sm mb-4 hidden"></p>
 
       <!-- Versão -->
