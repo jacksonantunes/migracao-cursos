@@ -23,7 +23,7 @@ if _BACKEND_DIR not in sys.path:
 from services.migration import executar_exportacao, executar_importacao, executar_migracao  # noqa: E402
 
 # ── Version ───────────────────────────────────────────────────────────────────
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 GITHUB_REPO = 'jacksonantunes/migracao-cursos'
 
 # ── In-memory state ───────────────────────────────────────────────────────────

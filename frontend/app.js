@@ -840,18 +840,41 @@ function renderModal(dados) {
     list.className = 'divide-y divide-gray-50';
 
     contents.forEach((c, ci) => {
-      const title = c.title || c.name || `Conteúdo ${ci + 1}`;
-      const flags = getContentFlags(c);
-      const ctype = c.content_type ? `<span class="text-xs text-gray-300 font-mono shrink-0">${escHtml(c.content_type)}</span>` : '';
+      const title      = c.title || c.name || `Conteúdo ${ci + 1}`;
+      const flags      = getContentFlags(c);
+      const ctype      = c.content_type ? `<span class="text-xs text-gray-300 font-mono shrink-0">${escHtml(c.content_type)}</span>` : '';
+      const detailHtml = buildContentDetail(c);
+      const hasDetail  = detailHtml.length > 0;
 
       const item = document.createElement('div');
-      item.className = 'flex items-center gap-3 px-4 py-2.5';
-      item.innerHTML = `
+      item.className = 'border-b border-gray-50 last:border-0';
+
+      const rowHeader = document.createElement('div');
+      rowHeader.className = 'flex items-center gap-3 px-4 py-2.5' + (hasDetail ? ' cursor-pointer hover:bg-gray-50 transition-colors' : '');
+      rowHeader.innerHTML = `
         <span class="text-xs font-mono text-gray-200 shrink-0 w-5 text-right">${ci + 1}</span>
         <span class="flex-1 text-sm text-gray-600 truncate" title="${escHtml(title)}">${escHtml(title)}</span>
         ${ctype}
         <div class="flex gap-0.5 shrink-0">${flags.map(f => `<span class="text-sm" title="${f.label}">${f.icon}</span>`).join('')}</div>
+        ${hasDetail ? '<span class="text-gray-300 text-xs shrink-0 ml-1 content-chevron">▶</span>' : ''}
       `;
+
+      item.appendChild(rowHeader);
+
+      if (hasDetail) {
+        const detail = document.createElement('div');
+        detail.className = 'hidden bg-gray-50 px-4 pb-3 pt-2 space-y-2.5 border-t border-gray-100';
+        detail.innerHTML = detailHtml;
+        item.appendChild(detail);
+
+        rowHeader.addEventListener('click', () => {
+          const open    = !detail.classList.contains('hidden');
+          const chevron = rowHeader.querySelector('.content-chevron');
+          detail.classList.toggle('hidden', open);
+          if (chevron) chevron.textContent = open ? '▶' : '▼';
+        });
+      }
+
       list.appendChild(item);
     });
 
@@ -867,6 +890,75 @@ function renderModal(dados) {
     section.appendChild(list);
     body.appendChild(section);
   });
+}
+
+function stripHtml(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+}
+
+function buildContentDetail(c) {
+  const parts = [];
+
+  // Texto
+  const bodyRaw = c.body || c.content;
+  if (bodyRaw) {
+    const plain   = stripHtml(bodyRaw);
+    const preview = plain.length > 500 ? plain.slice(0, 500) + '…' : plain;
+    if (preview) parts.push(`
+      <div>
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">📝 Texto</span>
+        <p class="text-xs text-gray-500 mt-1 leading-relaxed whitespace-pre-wrap">${escHtml(preview)}</p>
+      </div>`);
+  }
+
+  // Vídeo URL direta
+  const videoUrl = c.video_url;
+  if (videoUrl) parts.push(`
+    <div>
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 Vídeo</span>
+      <a href="${videoUrl}" target="_blank" rel="noopener"
+        class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(videoUrl)}</a>
+    </div>`);
+
+  // Embed
+  const embedRaw = c.video_embed || c.embed_code;
+  if (embedRaw && !videoUrl) {
+    const srcMatch = embedRaw.match(/src=["']([^"']+)["']/i);
+    const embedUrl = srcMatch ? srcMatch[1] : null;
+    parts.push(`
+      <div>
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 Embed</span>
+        ${embedUrl
+          ? `<a href="${embedUrl}" target="_blank" rel="noopener" class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(embedUrl)}</a>`
+          : `<span class="block text-xs text-gray-400 mt-1 font-mono bg-white rounded px-2 py-1 border border-gray-100 truncate">${escHtml(embedRaw.slice(0, 120))}${embedRaw.length > 120 ? '…' : ''}</span>`
+        }
+      </div>`);
+  }
+
+  // Arquivo
+  const fileUrl = c.file_url || c.attachment_url || (typeof c.file === 'string' ? c.file : null);
+  if (fileUrl) {
+    const fname = decodeURIComponent(fileUrl.split('/').pop().split('?')[0]) || 'Arquivo';
+    parts.push(`
+      <div>
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">📎 Arquivo</span>
+        <a href="${fileUrl}" target="_blank" rel="noopener"
+          class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(fname)}</a>
+      </div>`);
+  }
+
+  // Link externo
+  const linkUrl = c.url || c.external_url;
+  if (linkUrl) parts.push(`
+    <div>
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🔗 Link</span>
+      <a href="${linkUrl}" target="_blank" rel="noopener"
+        class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(linkUrl)}</a>
+    </div>`);
+
+  return parts.join('');
 }
 
 function getContentFlags(c) {
