@@ -3,15 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Migração Edools → MemberKit</title>
+  <title>Migrador de Cursos — Edools → MemberKit</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🔄</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800">
 
   <!-- ════════════════════════════════════════════════
+       CABEÇALHO GLOBAL
+  ════════════════════════════════════════════════ -->
+  <header class="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-3xl mx-auto px-6 h-14 flex items-center gap-3">
+      <div class="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg shrink-0">
+        <span class="text-base leading-none">🔄</span>
+      </div>
+      <div class="flex items-baseline gap-2">
+        <span class="font-bold text-gray-800 text-sm">Migrador de Cursos</span>
+        <span class="text-gray-300 text-xs hidden sm:inline">|</span>
+        <span class="text-gray-400 text-xs hidden sm:inline">Edools → MemberKit</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════════
        TELA 1 — Configuração
   ════════════════════════════════════════════════ -->
-  <div id="screen-config" class="min-h-screen flex items-center justify-center p-4">
+  <div id="screen-config" class="min-h-screen flex items-center justify-center p-4 pt-20">
     <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
 
       <div class="text-center mb-8">
@@ -61,7 +78,7 @@
   <!-- ════════════════════════════════════════════════
        TELA 2 — Listagem de Cursos
   ════════════════════════════════════════════════ -->
-  <div id="screen-cursos" class="hidden min-h-screen p-6">
+  <div id="screen-cursos" class="hidden min-h-screen p-6 pt-20">
     <div class="max-w-3xl mx-auto">
 
       <div class="flex items-start justify-between mb-5">
@@ -145,7 +162,7 @@
   <!-- ════════════════════════════════════════════════
        TELA 3 — Progresso
   ════════════════════════════════════════════════ -->
-  <div id="screen-progresso" class="hidden min-h-screen p-6">
+  <div id="screen-progresso" class="hidden min-h-screen p-6 pt-20">
     <div class="max-w-3xl mx-auto">
 
       <div class="flex items-start justify-between mb-5">

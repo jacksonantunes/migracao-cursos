@@ -5,6 +5,7 @@ let buscarInterval  = null;  // course-search poll timer
 let allCourses      = [];
 let logCount        = 0;
 let courseJobMap    = {};    // courseId → mini job_id (single-course re-migrations)
+let courseDataReady = {};    // courseId → jobId where export data is available
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function showScreen(name) {
@@ -226,6 +227,7 @@ function iniciarMigracao() {
   // Prepare screen without starting
   logCount = 0;
   courseJobMap = {};
+  courseDataReady = {};
   currentJobId = null;
   document.getElementById('log-area').innerHTML = '';
   document.getElementById('resultado-card').classList.add('hidden');
@@ -286,9 +288,9 @@ function renderProgressoCursos(cursos) {
           class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
           🔄 Migrar
         </button>
-        <button onclick="downloadCurso(${c.id})"
+        <button onclick="handleDownload(${c.id})"
           id="dl-${c.id}"
-          class="hidden text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
+          class="text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap">
           ⬇ JSON
         </button>
       </div>
@@ -347,9 +349,9 @@ function updateProgressoCursos(cursos, erros, dados) {
       erroEl.classList.add('hidden');
     }
 
-    // Show download button once export data exists
-    if (dlBtn && dados[cid]) {
-      dlBtn.classList.remove('hidden');
+    // Track data availability for direct download
+    if (dados[cid] && !courseDataReady[cid]) {
+      courseDataReady[cid] = currentJobId;
     }
   }
 }
@@ -414,11 +416,8 @@ async function migrarCursoUnico(courseId, courseName) {
             erroEl.classList.remove('hidden');
           }
 
-          const dlBtn = document.getElementById(`dl-${courseId}`);
-          if (dlBtn && (job.dados || {})[cid]) {
-            // store job_id so download uses this sub-job
-            dlBtn.onclick = () => downloadFromJob(job_id, courseId);
-            dlBtn.classList.remove('hidden');
+          if ((job.dados || {})[cid]) {
+            courseDataReady[courseId] = job_id;
           }
 
           if (btn) { btn.textContent = '🔄 Migrar'; btn.disabled = false; btn.dataset.logCount = '0'; }
@@ -435,9 +434,55 @@ async function migrarCursoUnico(courseId, courseName) {
 }
 
 // ── Download ──────────────────────────────────────────────────────────────────
-function downloadCurso(courseId) {
-  if (!currentJobId) return;
-  triggerDownload(`/api/download/${currentJobId}/${courseId}`);
+function handleDownload(courseId) {
+  const jobId = courseDataReady[courseId];
+  if (jobId) {
+    triggerDownload(`/api/download/${jobId}/${courseId}`);
+    return;
+  }
+  // Data not available yet — export from Edools first
+  exportarEBaixar(courseId);
+}
+
+async function exportarEBaixar(courseId) {
+  const dlBtn = document.getElementById(`dl-${courseId}`);
+  if (dlBtn) { dlBtn.textContent = '⏳'; dlBtn.disabled = true; }
+
+  try {
+    const res = await fetch('/api/exportar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ curso_ids: [courseId] }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || await res.text());
+    const { job_id } = await res.json();
+
+    // Poll until done
+    await new Promise((resolve, reject) => {
+      const timer = setInterval(async () => {
+        try {
+          const r   = await fetch(`/api/status/${job_id}`);
+          const job = await r.json();
+          if (job.status === 'done' || job.status === 'error') {
+            clearInterval(timer);
+            const cid = String(courseId);
+            if ((job.dados || {})[cid]) {
+              courseDataReady[courseId] = job_id;
+              resolve(job_id);
+            } else {
+              reject(new Error((job.erros || {})[cid] || 'Falha ao exportar'));
+            }
+          }
+        } catch (e) { clearInterval(timer); reject(e); }
+      }, 1500);
+    });
+
+    triggerDownload(`/api/download/${courseDataReady[courseId]}/${courseId}`);
+  } catch (e) {
+    alert(`Erro ao exportar: ${e.message}`);
+  } finally {
+    if (dlBtn) { dlBtn.textContent = '⬇ JSON'; dlBtn.disabled = false; }
+  }
 }
 
 function downloadFromJob(jobId, courseId) {

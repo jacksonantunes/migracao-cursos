@@ -19,7 +19,7 @@ MAPPING_FILE  = os.path.join(_PROJECT_ROOT, 'memberkit_mapping.json')
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
-from services.migration import executar_migracao  # noqa: E402
+from services.migration import executar_exportacao, executar_migracao  # noqa: E402
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 app_config: dict = {}   # credentials (never written to disk)
@@ -195,6 +195,31 @@ def download_curso(job_id: str, course_id: str):
         media_type='application/json',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+@app.post('/api/exportar')
+def exportar_cursos(body: MigrarPayload, background_tasks: BackgroundTasks):
+    """Export courses from Edools only (no MemberKit import)."""
+    if not app_config:
+        raise HTTPException(400, 'Configure as credenciais primeiro')
+
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        'status':    'running',
+        'logs':      [],
+        'cursos':    {str(cid): 'aguardando' for cid in body.curso_ids},
+        'erros':     {},
+        'dados':     {},
+        'resultado': None,
+    }
+    background_tasks.add_task(
+        executar_exportacao,
+        body.curso_ids,
+        dict(app_config),
+        jobs,
+        job_id,
+    )
+    return {'job_id': job_id}
 
 
 # ── Health check ─────────────────────────────────────────────────────────────
