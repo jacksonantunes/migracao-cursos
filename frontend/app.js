@@ -6,6 +6,15 @@ async function checkVersion() {
     ({ version: current, repo } = await r.json());
   } catch { return; }
 
+  // Exibe versão imediatamente, antes de checar o GitHub
+  const badge = document.getElementById('version-badge');
+  const dot   = document.getElementById('version-dot');
+  const label = document.getElementById('version-label');
+  label.textContent = `v${current}`;
+  badge.classList.remove('hidden');
+  badge.classList.add('flex');
+
+  // Checa GitHub Releases em paralelo
   let latest = null;
   let releaseUrl = `https://github.com/${repo}/releases`;
   try {
@@ -17,30 +26,22 @@ async function checkVersion() {
       latest = data.tag_name?.replace(/^v/, '');
       if (data.html_url) releaseUrl = data.html_url;
     }
-  } catch { /* offline or no releases — show current version only */ }
+  } catch { /* offline ou sem releases */ }
 
   const upToDate = !latest || latest === current;
-  const badge    = document.getElementById('version-badge');
-  const dot      = document.getElementById('version-dot');
-  const label    = document.getElementById('version-label');
-
   badge.href = releaseUrl;
-  badge.classList.remove('hidden');
-  badge.classList.add('flex');
 
   if (upToDate) {
-    badge.className = badge.className.replace('border', '') +
-      ' border border-green-200 bg-green-50 text-green-700 hover:bg-green-100';
-    dot.className   = dot.className + ' bg-green-500';
+    badge.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
+    dot.classList.add('bg-green-500');
     label.textContent = `v${current} · Atualizado`;
   } else {
-    badge.className = badge.className.replace('border', '') +
-      ' border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100';
-    dot.className   = dot.className + ' bg-orange-500 animate-pulse';
+    badge.classList.add('border-orange-200', 'bg-orange-50', 'text-orange-700');
+    dot.classList.add('bg-orange-500', 'animate-pulse');
     label.textContent = `v${current} → v${latest}`;
   }
 
-  // Config screen card
+  // Card na tela de configuração
   const card     = document.getElementById('version-card');
   const cardIcon = document.getElementById('version-card-icon');
   const cardText = document.getElementById('version-card-text');
@@ -48,11 +49,11 @@ async function checkVersion() {
 
   card.classList.remove('hidden');
   if (upToDate) {
-    card.className = card.className + ' bg-green-50 border-green-200';
+    card.classList.add('bg-green-50', 'border-green-200');
     cardIcon.textContent = '✅';
     cardText.textContent = `Versão ${current} — você está usando a versão mais recente.`;
   } else {
-    card.className = card.className + ' bg-orange-50 border-orange-200';
+    card.classList.add('bg-orange-50', 'border-orange-200');
     cardIcon.textContent = '⬆️';
     cardText.innerHTML = `Versão <strong>${current}</strong> instalada — nova versão <strong>v${latest}</strong> disponível.`;
     cardLink.href = releaseUrl;
