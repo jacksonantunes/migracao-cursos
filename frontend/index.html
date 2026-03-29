@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migração Edools → MemberKit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+
+  <!-- ════════════════════════════════════════════════
+       TELA 1 — Configuração
+  ════════════════════════════════════════════════ -->
+  <div id="screen-config" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
+
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-14 h-14 bg-blue-100 rounded-full mb-4">
+          <span class="text-2xl">🔄</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800">Migração de Cursos</h1>
+        <p class="text-gray-400 mt-1 text-sm">Edools → MemberKit</p>
+      </div>
+
+      <div class="mb-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Edools (Origem)</h2>
+        <div class="space-y-3">
+          <input id="edools-token" type="password" placeholder="Token API Edools"
+            class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input id="edools-url" type="text" value="https://core.myedools.com/api"
+            placeholder="URL Base Edools"
+            class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">MemberKit (Destino)</h2>
+        <div class="space-y-3">
+          <input id="mk-key" type="password" placeholder="API Key MemberKit"
+            class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input id="mk-url" type="text" value="https://memberkit.com.br/api/v1"
+            placeholder="URL Base MemberKit"
+            class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+
+      <p id="config-error" class="text-red-500 text-sm mb-4 hidden"></p>
+
+      <button id="btn-conectar" onclick="conectar()"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors text-sm">
+        Conectar e Listar Cursos →
+      </button>
+
+      <p class="text-center text-xs text-gray-400 mt-4">
+        Credenciais mantidas apenas em memória — nunca salvas em disco.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════════
+       TELA 2 — Listagem de Cursos
+  ════════════════════════════════════════════════ -->
+  <div id="screen-cursos" class="hidden min-h-screen p-6">
+    <div class="max-w-3xl mx-auto">
+
+      <div class="flex items-start justify-between mb-5">
+        <div>
+          <h1 class="text-xl font-bold text-gray-800">Selecionar Cursos</h1>
+          <p id="cursos-summary" class="text-gray-400 text-sm mt-0.5"></p>
+        </div>
+        <button onclick="voltarConfig()"
+          class="text-sm text-gray-400 hover:text-gray-600 underline underline-offset-2 mt-1">
+          ← Alterar configurações
+        </button>
+      </div>
+
+      <!-- Loading com progresso -->
+      <div id="cursos-loading" class="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+        <div class="flex flex-col items-center gap-4">
+          <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+          <p class="text-gray-600 text-sm font-medium">Buscando cursos na Edools...</p>
+
+          <!-- Barra de progresso -->
+          <div class="w-full max-w-sm">
+            <div class="flex justify-between text-xs text-gray-400 mb-1">
+              <span id="busca-label">Iniciando...</span>
+              <span id="busca-count" class="font-mono"></span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-2">
+              <div id="busca-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
+            </div>
+          </div>
+
+          <!-- Log de busca (últimas linhas) -->
+          <div id="busca-log" class="w-full max-w-sm font-mono text-xs text-gray-400 text-center truncate h-4"></div>
+        </div>
+      </div>
+
+      <!-- Conteúdo após carregar -->
+      <div id="cursos-content" class="hidden">
+
+        <!-- Barra de filtro + botões -->
+        <div class="flex gap-2 mb-3">
+          <div class="relative flex-1">
+            <span class="absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm pointer-events-none">🔍</span>
+            <input id="course-filter" type="text" placeholder="Filtrar por nome..."
+              oninput="filtrarCursos(this.value)"
+              class="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <button onclick="selecionarTodos()"
+            class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-4 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap">
+            ☑ Selecionar todos
+          </button>
+          <button onclick="migrarTodosSelecionados()"
+            class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap">
+            ⚡ Migrar todos
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+          <div class="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
+            <label class="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+              <input type="checkbox" id="select-all" onchange="toggleAll(this)"
+                class="w-4 h-4 rounded border-gray-300 accent-blue-600">
+              Selecionar todos
+            </label>
+            <span id="selected-count" class="ml-auto text-sm text-gray-400">0 selecionados</span>
+          </div>
+          <div id="cursos-list" class="divide-y divide-gray-50 max-h-[52vh] overflow-y-auto"></div>
+        </div>
+
+        <div class="flex justify-end">
+          <button id="btn-migrar" onclick="iniciarMigracao()" disabled
+            class="bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-semibold px-8 py-3 rounded-lg transition-colors text-sm">
+            Migrar selecionados →
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════════
+       TELA 3 — Progresso
+  ════════════════════════════════════════════════ -->
+  <div id="screen-progresso" class="hidden min-h-screen p-6">
+    <div class="max-w-3xl mx-auto">
+
+      <div class="flex items-start justify-between mb-5">
+        <div>
+          <h1 class="text-xl font-bold text-gray-800">Progresso da Migração</h1>
+          <p id="progresso-status" class="text-gray-400 text-sm mt-0.5">Aguardando início...</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="btn-iniciar-migracao" onclick="executarMigracao()"
+            class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
+            ▶ Iniciar Migração
+          </button>
+          <button id="btn-nova-migracao" onclick="novaMigracao()"
+            class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
+            ← Voltar
+          </button>
+        </div>
+      </div>
+
+      <!-- Status por curso -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Cursos</h2>
+        </div>
+        <div id="progresso-lista" class="divide-y divide-gray-50"></div>
+      </div>
+
+      <!-- Log em tempo real -->
+      <div class="bg-gray-900 rounded-xl overflow-hidden mb-4">
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-700">
+          <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Log</h2>
+          <button onclick="scrollLog()"
+            class="text-xs text-gray-500 hover:text-gray-300 transition-colors">↓ fim</button>
+        </div>
+        <div id="log-area"
+          class="h-56 overflow-y-auto font-mono text-xs text-green-400 px-4 py-3 space-y-0.5 leading-relaxed"></div>
+      </div>
+
+      <!-- Resultado final -->
+      <div id="resultado-card" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Resultado Final</h2>
+        <div id="resultado-content"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
