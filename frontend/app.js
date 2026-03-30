@@ -466,7 +466,7 @@ function renderProgressoCursos(cursos) {
       <span class="text-xs text-gray-300 shrink-0">ID: ${c.id}</span>
       <span id="badge-${c.id}" class="text-xs text-gray-400 font-medium shrink-0">Aguardando</span>
       <div class="flex gap-1 shrink-0">
-        <button onclick="migrarCursoUnico(${c.id}, '${escHtml(c.name)}')"
+        <button onclick="migrarCursoUnico(${c.id})"
           id="btn-migrar-${c.id}" title="Re-migrar"
           class="w-7 h-7 flex items-center justify-center text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors">
           🔄
@@ -522,13 +522,12 @@ function updateProgressoCursos(cursos, erros, dados) {
     const icon   = document.getElementById(`icon-${cid}`);
     const badge  = document.getElementById(`badge-${cid}`);
     const erroEl = document.getElementById(`erro-${cid}`);
-    const dlBtn  = document.getElementById(`dl-${cid}`);
     if (!icon) continue;
 
     const s = STATUS_MAP[status] || { icon: '❓', label: status, cls: 'text-gray-400' };
     icon.textContent  = s.icon;
     badge.textContent = s.label;
-    badge.className   = `text-xs font-medium min-w-[90px] text-right shrink-0 ${s.cls}`;
+    badge.className   = `text-xs font-medium shrink-0 ${s.cls}`;
 
     if (status === 'erro' && erros[cid] && erroEl) {
       erroEl.textContent = erros[cid];
@@ -545,7 +544,7 @@ function updateProgressoCursos(cursos, erros, dados) {
 }
 
 // ── Migrar curso individual ───────────────────────────────────────────────────
-async function migrarCursoUnico(courseId, courseName) {
+async function migrarCursoUnico(courseId) {
   const btn = document.getElementById(`btn-migrar-${courseId}`);
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
 
@@ -554,7 +553,7 @@ async function migrarCursoUnico(courseId, courseName) {
   const badge = document.getElementById(`badge-${courseId}`);
   const erroEl = document.getElementById(`erro-${courseId}`);
   if (icon)  icon.textContent  = '⚙️';
-  if (badge) { badge.textContent = 'Processando...'; badge.className = 'text-xs font-medium min-w-[90px] text-right shrink-0 text-blue-500'; }
+  if (badge) { badge.textContent = 'Processando...'; badge.className = 'text-xs font-medium shrink-0 text-blue-500'; }
   if (erroEl) erroEl.classList.add('hidden');
 
   try {
@@ -597,7 +596,7 @@ async function migrarCursoUnico(courseId, courseName) {
           const status = job.cursos[cid];
           const s = STATUS_MAP[status] || { icon: '❓', label: status, cls: 'text-gray-400' };
           if (icon)  icon.textContent  = s.icon;
-          if (badge) { badge.textContent = s.label; badge.className = `text-xs font-medium min-w-[90px] text-right shrink-0 ${s.cls}`; }
+          if (badge) { badge.textContent = s.label; badge.className = `text-xs font-medium shrink-0 ${s.cls}`; }
 
           if (status === 'erro' && erroEl) {
             erroEl.textContent = (job.erros || {})[cid] || 'Erro desconhecido';
@@ -615,7 +614,7 @@ async function migrarCursoUnico(courseId, courseName) {
 
   } catch (e) {
     if (icon)  icon.textContent  = '❌';
-    if (badge) { badge.textContent = 'Erro'; badge.className = 'text-xs font-medium min-w-[90px] text-right shrink-0 text-red-500'; }
+    if (badge) { badge.textContent = 'Erro'; badge.className = 'text-xs font-medium shrink-0 text-red-500'; }
     if (erroEl) { erroEl.textContent = e.message; erroEl.classList.remove('hidden'); }
     if (btn)  { btn.textContent = '🔄 Migrar'; btn.disabled = false; }
   }
@@ -840,7 +839,12 @@ function renderModal(dados) {
     list.className = 'divide-y divide-gray-50';
 
     contents.forEach((c, ci) => {
-      const title      = c.title || c.name || `Conteúdo ${ci + 1}`;
+      const title      = c.title || c.name || c.heading || c.label || c.subject
+                       || c.lesson_name || c.content_name || c.course_content_name
+                       || c.lesson?.title || c.lesson?.name
+                       || c.content?.title || c.content?.name
+                       || (typeof c.description === 'string' && c.description.length < 80 ? c.description : null)
+                       || `Conteúdo ${ci + 1}`;
       const flags      = getContentFlags(c);
       const ctype      = c.content_type ? `<span class="text-xs text-gray-300 font-mono shrink-0">${escHtml(c.content_type)}</span>` : '';
       const detailHtml = buildContentDetail(c);
@@ -902,8 +906,8 @@ function buildContentDetail(c) {
   const parts = [];
 
   // Texto
-  const bodyRaw = c.body || c.content;
-  if (bodyRaw) {
+  const bodyRaw = c.body || c.content || c.description || c.text || c.html_content;
+  if (bodyRaw && typeof bodyRaw === 'string' && bodyRaw.trim()) {
     const plain   = stripHtml(bodyRaw);
     const preview = plain.length > 500 ? plain.slice(0, 500) + '…' : plain;
     if (preview) parts.push(`
@@ -914,8 +918,8 @@ function buildContentDetail(c) {
   }
 
   // Vídeo URL direta
-  const videoUrl = c.video_url;
-  if (videoUrl) parts.push(`
+  const videoUrl = c.video_url || c.video || c.video_link || c.media_url;
+  if (videoUrl && typeof videoUrl === 'string') parts.push(`
     <div>
       <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 Vídeo</span>
       <a href="${videoUrl}" target="_blank" rel="noopener"
@@ -923,8 +927,8 @@ function buildContentDetail(c) {
     </div>`);
 
   // Embed
-  const embedRaw = c.video_embed || c.embed_code;
-  if (embedRaw && !videoUrl) {
+  const embedRaw = c.video_embed || c.embed_code || c.embed || c.iframe_code;
+  if (embedRaw && typeof embedRaw === 'string' && !videoUrl) {
     const srcMatch = embedRaw.match(/src=["']([^"']+)["']/i);
     const embedUrl = srcMatch ? srcMatch[1] : null;
     parts.push(`
@@ -938,8 +942,10 @@ function buildContentDetail(c) {
   }
 
   // Arquivo
-  const fileUrl = c.file_url || c.attachment_url || (typeof c.file === 'string' ? c.file : null);
-  if (fileUrl) {
+  const fileUrl = c.file_url || c.attachment_url || c.file_path
+    || (typeof c.file === 'string' && c.file.includes('http') ? c.file : null)
+    || (typeof c.attachment === 'string' && c.attachment.includes('http') ? c.attachment : null);
+  if (fileUrl && typeof fileUrl === 'string') {
     const fname = decodeURIComponent(fileUrl.split('/').pop().split('?')[0]) || 'Arquivo';
     parts.push(`
       <div>
@@ -950,24 +956,56 @@ function buildContentDetail(c) {
   }
 
   // Link externo
-  const linkUrl = c.url || c.external_url;
-  if (linkUrl) parts.push(`
+  const linkUrl = c.url || c.external_url || c.link;
+  if (linkUrl && typeof linkUrl === 'string') parts.push(`
     <div>
       <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🔗 Link</span>
       <a href="${linkUrl}" target="_blank" rel="noopener"
         class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(linkUrl)}</a>
     </div>`);
 
+  // Fallback: mostrar todos os campos disponíveis para diagnóstico
+  if (parts.length === 0) {
+    const skipKeys = new Set(['id', 'position', 'created_at', 'updated_at', 'course_module_id',
+      'lesson_id', 'content_type', 'school_id', 'permalink', 'slug', 'published', 'free',
+      'locked', 'forced_position', 'delayed_publication_at']);
+    const available = Object.entries(c).filter(([k, v]) =>
+      !skipKeys.has(k) && v !== null && v !== undefined && v !== '' && v !== false
+    );
+    if (available.length) {
+      const rows = available.map(([k, v]) => {
+        const display = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        const preview = display.length > 200 ? display.slice(0, 200) + '…' : display;
+        return `<div class="flex gap-2 text-xs py-0.5">
+          <span class="font-semibold text-gray-400 shrink-0 w-32 truncate">${escHtml(k)}</span>
+          <span class="text-gray-500 break-all">${escHtml(preview)}</span>
+        </div>`;
+      }).join('');
+      parts.push(`
+        <div>
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 block">Campos disponíveis</span>
+          <div class="space-y-0.5 bg-white rounded border border-gray-100 px-3 py-2">${rows}</div>
+        </div>`);
+    }
+  }
+
   return parts.join('');
 }
 
 function getContentFlags(c) {
   const flags = [];
-  if (c.body || c.content)                                   flags.push({ icon: '📝', label: 'Texto' });
-  if (c.video_url || c.video_embed || c.embed_code)          flags.push({ icon: '🎥', label: 'Vídeo' });
-  if (c.file_url  || c.attachment_url || c.file)             flags.push({ icon: '📎', label: 'Arquivo' });
-  if (c.url       || c.external_url)                         flags.push({ icon: '🔗', label: 'Link' });
-  if (!flags.length)                                         flags.push({ icon: '⚪', label: 'Sem mídia detectada' });
+  const hasText  = c.body || c.content || c.description || c.text || c.html_content;
+  const hasVideo = c.video_url || c.video || c.video_link || c.media_url
+                || c.video_embed || c.embed_code || c.embed;
+  const hasFile  = c.file_url || c.attachment_url || c.file_path
+                || (typeof c.file === 'string' && c.file.includes('http') ? c.file : null)
+                || (typeof c.attachment === 'string' && c.attachment.includes('http') ? c.attachment : null);
+  const hasLink  = c.url || c.external_url || c.link;
+  if (hasText  && typeof hasText  === 'string') flags.push({ icon: '📝', label: 'Texto' });
+  if (hasVideo && typeof hasVideo === 'string') flags.push({ icon: '🎥', label: 'Vídeo' });
+  if (hasFile)                                  flags.push({ icon: '📎', label: 'Arquivo' });
+  if (hasLink  && typeof hasLink  === 'string') flags.push({ icon: '🔗', label: 'Link' });
+  if (!flags.length)                            flags.push({ icon: '⚪', label: 'Sem mídia detectada' });
   return flags;
 }
 
