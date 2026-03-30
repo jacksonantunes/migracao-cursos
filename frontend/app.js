@@ -456,31 +456,35 @@ function renderProgressoCursos(cursos) {
   cursos.forEach(c => {
     const row = document.createElement('div');
     row.id    = `row-${c.id}`;
-    row.className = 'flex items-center px-4 py-3 gap-3';
+    row.className = 'px-4 py-3';
     row.innerHTML = `
-      <span id="icon-${c.id}" class="text-lg w-6 text-center shrink-0">⏳</span>
-      <div class="flex-1 min-w-0">
-        <span class="block text-sm font-medium text-gray-700 truncate">${escHtml(c.name)}</span>
-        <span id="erro-${c.id}" class="text-xs text-red-500 hidden block"></span>
-      </div>
-      <span class="text-xs text-gray-300 shrink-0">ID: ${c.id}</span>
-      <span id="badge-${c.id}" class="text-xs text-gray-400 font-medium shrink-0">Aguardando</span>
-      <div class="flex gap-1 shrink-0">
-        <button onclick="migrarCursoUnico(${c.id})"
-          id="btn-migrar-${c.id}" title="Re-migrar"
-          class="w-7 h-7 flex items-center justify-center text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors">
-          🔄
-        </button>
-        <button onclick="handleDownload(${c.id})"
-          id="dl-${c.id}" title="Baixar JSON"
-          class="hidden w-7 h-7 items-center justify-center text-sm bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg transition-colors">
-          ⬇
-        </button>
-        <button onclick="handleView(${c.id})"
-          id="view-${c.id}" title="Visualizar dados"
-          class="hidden w-7 h-7 items-center justify-center text-sm bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-200 rounded-lg transition-colors">
-          👁
-        </button>
+      <div class="flex items-center gap-3">
+        <span id="icon-${c.id}" class="text-lg w-6 text-center shrink-0">⏳</span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm font-medium text-gray-700 truncate flex-1">${escHtml(c.name)}</span>
+            <span id="badge-${c.id}" class="text-xs font-medium shrink-0 text-gray-400">Aguardando</span>
+          </div>
+          <span id="erro-${c.id}" class="text-xs text-red-500 hidden block mt-0.5"></span>
+          <div class="flex items-center gap-2 mt-2 flex-wrap">
+            <span class="text-xs text-gray-300">ID: ${c.id}</span>
+            <button onclick="migrarCursoUnico(${c.id})"
+              id="btn-migrar-${c.id}"
+              class="flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors">
+              🔄 <span>Re-migrar</span>
+            </button>
+            <button onclick="handleDownload(${c.id})"
+              id="dl-${c.id}"
+              class="hidden items-center gap-1.5 text-xs font-semibold px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded-lg transition-colors">
+              ⬇ <span>Baixar JSON</span>
+            </button>
+            <button onclick="handleView(${c.id})"
+              id="view-${c.id}"
+              class="hidden items-center gap-1.5 text-xs font-semibold px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm">
+              👁 <span>Visualizar</span>
+            </button>
+          </div>
+        </div>
       </div>
     `;
     lista.appendChild(row);
