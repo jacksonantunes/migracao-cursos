@@ -902,38 +902,39 @@ function stripHtml(html) {
   return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
 }
 
-function buildContentDetail(c) {
+/** Extract media blocks from a single source object (c or c.lesson, etc.). */
+function _mediaBlocksFrom(src, label) {
   const parts = [];
 
   // Texto
-  const bodyRaw = c.body || c.content || c.description || c.text || c.html_content;
+  const bodyRaw = src.body || src.content || src.description || src.text || src.html_content;
   if (bodyRaw && typeof bodyRaw === 'string' && bodyRaw.trim()) {
     const plain   = stripHtml(bodyRaw);
     const preview = plain.length > 500 ? plain.slice(0, 500) + '…' : plain;
     if (preview) parts.push(`
       <div>
-        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">📝 Texto</span>
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">📝 ${escHtml(label)} — Texto</span>
         <p class="text-xs text-gray-500 mt-1 leading-relaxed whitespace-pre-wrap">${escHtml(preview)}</p>
       </div>`);
   }
 
   // Vídeo URL direta
-  const videoUrl = c.video_url || c.video || c.video_link || c.media_url;
+  const videoUrl = src.video_url || src.video || src.video_link || src.media_url;
   if (videoUrl && typeof videoUrl === 'string') parts.push(`
     <div>
-      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 Vídeo</span>
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 ${escHtml(label)} — Vídeo</span>
       <a href="${videoUrl}" target="_blank" rel="noopener"
         class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(videoUrl)}</a>
     </div>`);
 
   // Embed
-  const embedRaw = c.video_embed || c.embed_code || c.embed || c.iframe_code;
+  const embedRaw = src.video_embed || src.embed_code || src.embed || src.iframe_code;
   if (embedRaw && typeof embedRaw === 'string' && !videoUrl) {
     const srcMatch = embedRaw.match(/src=["']([^"']+)["']/i);
     const embedUrl = srcMatch ? srcMatch[1] : null;
     parts.push(`
       <div>
-        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 Embed</span>
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🎥 ${escHtml(label)} — Embed</span>
         ${embedUrl
           ? `<a href="${embedUrl}" target="_blank" rel="noopener" class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(embedUrl)}</a>`
           : `<span class="block text-xs text-gray-400 mt-1 font-mono bg-white rounded px-2 py-1 border border-gray-100 truncate">${escHtml(embedRaw.slice(0, 120))}${embedRaw.length > 120 ? '…' : ''}</span>`
@@ -942,36 +943,64 @@ function buildContentDetail(c) {
   }
 
   // Arquivo
-  const fileUrl = c.file_url || c.attachment_url || c.file_path
-    || (typeof c.file === 'string' && c.file.includes('http') ? c.file : null)
-    || (typeof c.attachment === 'string' && c.attachment.includes('http') ? c.attachment : null);
+  const fileUrl = src.file_url || src.attachment_url || src.file_path
+    || (typeof src.file === 'string' && src.file.includes('http') ? src.file : null)
+    || (typeof src.attachment === 'string' && src.attachment.includes('http') ? src.attachment : null);
   if (fileUrl && typeof fileUrl === 'string') {
     const fname = decodeURIComponent(fileUrl.split('/').pop().split('?')[0]) || 'Arquivo';
     parts.push(`
       <div>
-        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">📎 Arquivo</span>
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">📎 ${escHtml(label)} — Arquivo</span>
         <a href="${fileUrl}" target="_blank" rel="noopener"
           class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(fname)}</a>
       </div>`);
   }
 
   // Link externo
-  const linkUrl = c.url || c.external_url || c.link;
+  const linkUrl = src.url || src.external_url || src.link;
   if (linkUrl && typeof linkUrl === 'string') parts.push(`
     <div>
-      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🔗 Link</span>
+      <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">🔗 ${escHtml(label)} — Link</span>
       <a href="${linkUrl}" target="_blank" rel="noopener"
         class="block text-xs text-blue-500 hover:underline mt-1 truncate">${escHtml(linkUrl)}</a>
     </div>`);
+
+  return parts;
+}
+
+function buildContentDetail(c) {
+  const parts = [];
+
+  // Campos diretos do conteúdo
+  parts.push(..._mediaBlocksFrom(c, 'Conteúdo'));
+
+  // Campos do objeto lesson aninhado
+  const lesson = c.lesson && typeof c.lesson === 'object' ? c.lesson : null;
+  if (lesson) parts.push(..._mediaBlocksFrom(lesson, 'Lesson'));
+
+  // Outros objetos aninhados comuns
+  for (const key of ['course_content', 'media', 'resource']) {
+    const nested = c[key] && typeof c[key] === 'object' ? c[key] : null;
+    if (nested) parts.push(..._mediaBlocksFrom(nested, key));
+  }
 
   // Fallback: mostrar todos os campos disponíveis para diagnóstico
   if (parts.length === 0) {
     const skipKeys = new Set(['id', 'position', 'created_at', 'updated_at', 'course_module_id',
       'lesson_id', 'content_type', 'school_id', 'permalink', 'slug', 'published', 'free',
       'locked', 'forced_position', 'delayed_publication_at']);
-    const available = Object.entries(c).filter(([k, v]) =>
-      !skipKeys.has(k) && v !== null && v !== undefined && v !== '' && v !== false
+
+    // Flatten top-level + lesson fields into a single view
+    const sources = [['', c]];
+    if (lesson) sources.push(['lesson.', lesson]);
+
+    const available = sources.flatMap(([prefix, obj]) =>
+      Object.entries(obj).filter(([k, v]) =>
+        !skipKeys.has(k) && v !== null && v !== undefined && v !== '' && v !== false
+        && !(typeof v === 'object' && Object.keys(v).length === 0)
+      ).map(([k, v]) => [prefix + k, v])
     );
+
     if (available.length) {
       const rows = available.map(([k, v]) => {
         const display = typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -993,19 +1022,24 @@ function buildContentDetail(c) {
 }
 
 function getContentFlags(c) {
+  // Check both the top-level object and any nested lesson/media object
+  const sources = [c, c.lesson, c.course_content, c.media].filter(s => s && typeof s === 'object');
+  const any = (fn) => sources.some(fn);
+
   const flags = [];
-  const hasText  = c.body || c.content || c.description || c.text || c.html_content;
-  const hasVideo = c.video_url || c.video || c.video_link || c.media_url
-                || c.video_embed || c.embed_code || c.embed;
-  const hasFile  = c.file_url || c.attachment_url || c.file_path
-                || (typeof c.file === 'string' && c.file.includes('http') ? c.file : null)
-                || (typeof c.attachment === 'string' && c.attachment.includes('http') ? c.attachment : null);
-  const hasLink  = c.url || c.external_url || c.link;
-  if (hasText  && typeof hasText  === 'string') flags.push({ icon: '📝', label: 'Texto' });
-  if (hasVideo && typeof hasVideo === 'string') flags.push({ icon: '🎥', label: 'Vídeo' });
-  if (hasFile)                                  flags.push({ icon: '📎', label: 'Arquivo' });
-  if (hasLink  && typeof hasLink  === 'string') flags.push({ icon: '🔗', label: 'Link' });
-  if (!flags.length)                            flags.push({ icon: '⚪', label: 'Sem mídia detectada' });
+  if (any(s => s.body || s.content || s.description || s.text || s.html_content))
+    flags.push({ icon: '📝', label: 'Texto' });
+  if (any(s => s.video_url || s.video || s.video_link || s.media_url
+            || s.video_embed || s.embed_code || s.embed))
+    flags.push({ icon: '🎥', label: 'Vídeo' });
+  if (any(s => s.file_url || s.attachment_url || s.file_path
+            || (typeof s.file === 'string' && s.file.includes('http'))
+            || (typeof s.attachment === 'string' && s.attachment.includes('http'))))
+    flags.push({ icon: '📎', label: 'Arquivo' });
+  if (any(s => s.url || s.external_url || s.link))
+    flags.push({ icon: '🔗', label: 'Link' });
+  if (!flags.length)
+    flags.push({ icon: '⚪', label: 'Sem mídia detectada' });
   return flags;
 }
 
