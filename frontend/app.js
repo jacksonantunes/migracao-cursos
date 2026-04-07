@@ -473,6 +473,11 @@ function renderProgressoCursos(cursos) {
               class="flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors">
               🔄 <span>Re-migrar</span>
             </button>
+            <button onclick="atualizarDadosCurso(${c.id})"
+              id="refresh-${c.id}"
+              class="flex items-center gap-1 text-xs px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg transition-colors">
+              ↻ <span>Atualizar dados</span>
+            </button>
             <button onclick="handleDownload(${c.id})"
               id="dl-${c.id}"
               class="hidden items-center gap-1.5 text-xs font-semibold px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded-lg transition-colors">
@@ -547,51 +552,164 @@ function updateProgressoCursos(cursos, erros, dados) {
   }
 }
 
-// ── Migrar curso individual ───────────────────────────────────────────────────
-async function migrarCursoUnico(courseId) {
-  const btn = document.getElementById(`btn-migrar-${courseId}`);
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+// ── Credenciais (alterar na tela de migração) ────────────────────────────────
+function toggleCredenciais() {
+  const painel = document.getElementById('painel-credenciais');
+  const aberto = !painel.classList.contains('hidden');
+  if (aberto) {
+    painel.classList.add('hidden');
+    return;
+  }
+  // Pré-preenche com os valores atuais da tela de config
+  document.getElementById('cred-edools-token').value = document.getElementById('edools-token').value;
+  document.getElementById('cred-edools-url').value   = document.getElementById('edools-url').value;
+  document.getElementById('cred-mk-key').value       = document.getElementById('mk-key').value;
+  document.getElementById('cred-mk-url').value       = document.getElementById('mk-url').value;
+  document.getElementById('cred-status').textContent = '';
+  painel.classList.remove('hidden');
+}
 
-  // Reset row UI
-  const icon  = document.getElementById(`icon-${courseId}`);
-  const badge = document.getElementById(`badge-${courseId}`);
+async function salvarCredenciais() {
+  const token = document.getElementById('cred-edools-token').value.trim();
+  const url   = document.getElementById('cred-edools-url').value.trim();
+  const key   = document.getElementById('cred-mk-key').value.trim();
+  const mkUrl = document.getElementById('cred-mk-url').value.trim();
+  const status = document.getElementById('cred-status');
+
+  if (!token || !url || !key || !mkUrl) {
+    status.textContent = 'Preencha todos os campos.';
+    status.className = 'text-xs ml-auto text-red-500';
+    return;
+  }
+
+  status.textContent = 'Salvando...';
+  status.className = 'text-xs ml-auto text-gray-400';
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ edools_token: token, edools_url: url, mk_key: key, mk_url: mkUrl }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || await res.text());
+
+    // Espelha de volta para os campos da tela de config
+    document.getElementById('edools-token').value = token;
+    document.getElementById('edools-url').value   = url;
+    document.getElementById('mk-key').value       = key;
+    document.getElementById('mk-url').value       = mkUrl;
+
+    status.textContent = '✓ Credenciais salvas!';
+    status.className = 'text-xs ml-auto text-green-600';
+    setTimeout(() => document.getElementById('painel-credenciais').classList.add('hidden'), 1200);
+  } catch (e) {
+    status.textContent = `Erro: ${e.message}`;
+    status.className = 'text-xs ml-auto text-red-500';
+  }
+}
+
+// ── Atualizar dados de um curso individual (re-exportar do Edools) ───────────
+async function atualizarDadosCurso(courseId) {
+  const btn    = document.getElementById(`refresh-${courseId}`);
+  const icon   = document.getElementById(`icon-${courseId}`);
+  const badge  = document.getElementById(`badge-${courseId}`);
   const erroEl = document.getElementById(`erro-${courseId}`);
-  if (icon)  icon.textContent  = '⚙️';
-  if (badge) { badge.textContent = 'Processando...'; badge.className = 'text-xs font-medium shrink-0 text-blue-500'; }
+
+  if (btn)   { btn.disabled = true; btn.innerHTML = '↻ <span>Buscando...</span>'; }
+  if (icon)  icon.textContent = '📥';
+  if (badge) { badge.textContent = 'Buscando...'; badge.className = 'text-xs font-medium shrink-0 text-blue-500'; }
   if (erroEl) erroEl.classList.add('hidden');
 
   try {
-    const res = await fetch('/api/migrar', {
+    const res = await fetch('/api/exportar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ curso_ids: [courseId] }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || await res.text());
     const { job_id } = await res.json();
+
+    await new Promise((resolve, reject) => {
+      const timer = setInterval(async () => {
+        try {
+          const r   = await fetch(`/api/status/${job_id}`);
+          const job = await r.json();
+          appendLogs(job.logs);
+          if (job.status === 'done' || job.status === 'error') {
+            clearInterval(timer);
+            const cid = String(courseId);
+            if ((job.dados || {})[cid]) { courseDataReady[courseId] = job_id; resolve(); }
+            else reject(new Error((job.erros || {})[cid] || 'Falha ao exportar'));
+          }
+        } catch (e) { clearInterval(timer); reject(e); }
+      }, 1500);
+    });
+
+    if (icon)  icon.textContent = '📦';
+    if (badge) { badge.textContent = 'Pronto para migrar'; badge.className = 'text-xs font-medium shrink-0 text-blue-600'; }
+    const dlBtn  = document.getElementById(`dl-${courseId}`);
+    const viewBtn = document.getElementById(`view-${courseId}`);
+    if (dlBtn)   { dlBtn.classList.remove('hidden');   dlBtn.classList.add('flex'); }
+    if (viewBtn) { viewBtn.classList.remove('hidden'); viewBtn.classList.add('flex'); }
+  } catch (e) {
+    if (icon)  icon.textContent = '❌';
+    if (badge) { badge.textContent = 'Erro ao buscar'; badge.className = 'text-xs font-medium shrink-0 text-red-500'; }
+    if (erroEl) { erroEl.textContent = e.message; erroEl.classList.remove('hidden'); }
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '↻ <span>Atualizar dados</span>'; }
+  }
+}
+
+// ── Migrar curso individual (usa dados já exportados se disponíveis) ──────────
+async function migrarCursoUnico(courseId) {
+  const btn = document.getElementById(`btn-migrar-${courseId}`);
+  if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+
+  const icon   = document.getElementById(`icon-${courseId}`);
+  const badge  = document.getElementById(`badge-${courseId}`);
+  const erroEl = document.getElementById(`erro-${courseId}`);
+  if (icon)  icon.textContent  = '⚙️';
+  if (badge) { badge.textContent = 'Importando...'; badge.className = 'text-xs font-medium shrink-0 text-blue-500'; }
+  if (erroEl) erroEl.classList.add('hidden');
+
+  try {
+    // Se já temos dados exportados, usa /api/importar (sem re-buscar Edools)
+    const existingJobId = courseDataReady[courseId];
+    let res;
+    if (existingJobId) {
+      res = await fetch('/api/importar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ export_job_id: existingJobId, curso_ids: [courseId] }),
+      });
+    } else {
+      res = await fetch('/api/migrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curso_ids: [courseId] }),
+      });
+    }
+    if (!res.ok) throw new Error((await res.json()).detail || await res.text());
+    const { job_id } = await res.json();
     courseJobMap[courseId] = job_id;
 
-    // Poll until done
     const timer = setInterval(async () => {
       try {
         const r   = await fetch(`/api/status/${job_id}`);
         const job = await r.json();
         const cid = String(courseId);
 
-        appendLogs(job.logs.slice(logCount >= 0 ? 0 : 0)); // append new logs
-        // We append ALL logs from this sub-job to the shared log
         if (job.logs.length) {
           const area = document.getElementById('log-area');
-          const lastJobLogs = job.logs;
-          // Only append lines we haven't seen for this sub-job
           const seen = parseInt(btn.dataset.logCount || '0');
-          lastJobLogs.slice(seen).forEach(line => {
+          job.logs.slice(seen).forEach(line => {
             const div = document.createElement('div');
             div.textContent = line;
             if (line.startsWith('❌')) div.classList.add('text-red-400');
             area.appendChild(div);
             area.scrollTop = area.scrollHeight;
           });
-          btn.dataset.logCount = lastJobLogs.length;
+          btn.dataset.logCount = job.logs.length;
         }
 
         if (job.status === 'done' || job.status === 'error') {
@@ -606,12 +724,9 @@ async function migrarCursoUnico(courseId) {
             erroEl.textContent = (job.erros || {})[cid] || 'Erro desconhecido';
             erroEl.classList.remove('hidden');
           }
+          if ((job.dados || {})[cid]) courseDataReady[courseId] = job_id;
 
-          if ((job.dados || {})[cid]) {
-            courseDataReady[courseId] = job_id;
-          }
-
-          if (btn) { btn.textContent = '🔄 Migrar'; btn.disabled = false; btn.dataset.logCount = '0'; }
+          if (btn) { btn.innerHTML = '🔄 <span>Re-migrar</span>'; btn.disabled = false; btn.dataset.logCount = '0'; }
         }
       } catch (e) { console.warn('Sub-poll error:', e); }
     }, 1500);
@@ -620,7 +735,7 @@ async function migrarCursoUnico(courseId) {
     if (icon)  icon.textContent  = '❌';
     if (badge) { badge.textContent = 'Erro'; badge.className = 'text-xs font-medium shrink-0 text-red-500'; }
     if (erroEl) { erroEl.textContent = e.message; erroEl.classList.remove('hidden'); }
-    if (btn)  { btn.textContent = '🔄 Migrar'; btn.disabled = false; }
+    if (btn)  { btn.innerHTML = '🔄 <span>Re-migrar</span>'; btn.disabled = false; }
   }
 }
 

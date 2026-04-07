@@ -212,15 +212,58 @@
           <h1 class="text-xl font-bold text-gray-800">Progresso da Migração</h1>
           <p id="progresso-status" class="text-gray-400 text-sm mt-0.5">Aguardando início...</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap justify-end">
+          <button onclick="toggleCredenciais()"
+            class="flex items-center gap-1.5 text-xs px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200 rounded-lg transition-colors">
+            ⚙ <span>Credenciais</span>
+          </button>
           <button id="btn-iniciar-migracao" onclick="executarMigracao()"
-            class="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
+            class="hidden bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
             ▶ Iniciar Migração
           </button>
           <button id="btn-nova-migracao" onclick="novaMigracao()"
             class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
             ← Voltar
           </button>
+        </div>
+      </div>
+
+      <!-- Painel de credenciais (collapsível) -->
+      <div id="painel-credenciais" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Alterar Credenciais</h2>
+          <button onclick="toggleCredenciais()" class="text-xs text-gray-400 hover:text-gray-600 transition-colors">✕ Fechar</button>
+        </div>
+        <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">Token Edools</label>
+            <input id="cred-edools-token" type="password" placeholder="Token Edools"
+              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">URL base Edools</label>
+            <input id="cred-edools-url" type="text" placeholder="https://core.myedools.com/api"
+              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">API Key MemberKit</label>
+            <input id="cred-mk-key" type="password" placeholder="API Key MemberKit"
+              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 block mb-1">URL base MemberKit</label>
+            <input id="cred-mk-url" type="text" placeholder="https://memberkit.com.br/api/v1"
+              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          </div>
+        </div>
+        <div class="px-4 pb-4 flex items-center gap-3">
+          <button onclick="salvarCredenciais()"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
+            Salvar
+          </button>
+          <button onclick="toggleCredenciais()"
+            class="text-sm text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
+          <span id="cred-status" class="text-xs ml-auto"></span>
         </div>
       </div>
 
@@ -284,6 +327,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=1.3.0"></script>
+  <script src="/app.js?v=1.4.0"></script>
 </body>
 </html>
